@@ -11,12 +11,12 @@ export default {
 
     // === 1. 静态资源托管 ===
     if (!path.startsWith('/api') && !path.startsWith('/d')) {
-      return env.ASSETS.fetch(request);
+      return env.assets.fetch(request);
     }
 
     // === 通用函数：获取有效 AccessToken ===
     async function getAccessToken() {
-        const tokenRecord = await env.DB.prepare("SELECT * FROM tokens ORDER BY RANDOM() LIMIT 1").first();
+        const tokenRecord = await env.db.prepare("SELECT * FROM tokens ORDER BY RANDOM() LIMIT 1").first();
         if (!tokenRecord) throw new Error('No tokens available');
 
         let accessToken = tokenRecord.access_token;
@@ -34,7 +34,7 @@ export default {
             accessToken = tokenData.access_token;
             const newExpire = nowTime + (tokenData.expires_in || 7200);
             const newRefreshToken = tokenData.refresh_token || tokenRecord.token;
-            env.DB.prepare("UPDATE tokens SET token = ?, access_token = ?, expires_at = ? WHERE id = ?")
+            env.db.prepare("UPDATE tokens SET token = ?, access_token = ?, expires_at = ? WHERE id = ?")
                   .bind(newRefreshToken, accessToken, newExpire, tokenRecord.id).run().catch(e => console.error(e));
 
         }
@@ -45,7 +45,7 @@ export default {
     if (path === '/api/login' && request.method === 'POST') {
       try {
         const { username, password } = await request.json();
-        const user = await env.DB.prepare('SELECT * FROM admin WHERE username = ? AND password = ?').bind(username, password).first();
+        const user = await env.db.prepare('SELECT * FROM admin WHERE username = ? AND password = ?').bind(username, password).first();
         if (user) return new Response(JSON.stringify({ success: true, token: 'session_ok' }), { headers: { 'Content-Type': 'application/json' } });
         return new Response(JSON.stringify({ success: false, msg: '账号或密码错误' }), { status: 401 });
       } catch (e) { return new Response(JSON.stringify({ error: e.message }), { status: 500 }); }
@@ -54,27 +54,27 @@ export default {
     // === 3. API: Token 管理 (查询/添加/修改) ===
     if (path === '/api/tokens') {
         if (request.method === 'GET') {
-            const { results } = await env.DB.prepare('SELECT id, name, substr(token, 1, 10) || "..." as token_preview, created_at FROM tokens ORDER BY id DESC').all();
+            const { results } = await env.db.prepare('SELECT id, name, substr(token, 1, 10) || "..." as token_preview, created_at FROM tokens ORDER BY id DESC').all();
             return new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
         }
         if (request.method === 'POST') {
             const { name, token } = await request.json();
-            await env.DB.prepare("INSERT INTO tokens (name, token) VALUES (?, ?)").bind(name, token.trim()).run();
+            await env.db.prepare("INSERT INTO tokens (name, token) VALUES (?, ?)").bind(name, token.trim()).run();
             return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
         }
         if (request.method === 'PUT') {
             const { id, name, token } = await request.json();
             if (token && token.trim() !== '') {
-                await env.DB.prepare("UPDATE tokens SET name = ?, token = ?, access_token = NULL, expires_at = NULL WHERE id = ?")
+                await env.db.prepare("UPDATE tokens SET name = ?, token = ?, access_token = NULL, expires_at = NULL WHERE id = ?")
                       .bind(name, token.trim(), id).run();
             } else {
-                await env.DB.prepare("UPDATE tokens SET name = ? WHERE id = ?").bind(name, id).run();
+                await env.db.prepare("UPDATE tokens SET name = ? WHERE id = ?").bind(name, id).run();
             }
             return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
         }
         if (request.method === 'DELETE') {
              const { id } = await request.json();
-             await env.DB.prepare("DELETE FROM tokens WHERE id = ?").bind(id).run();
+             await env.db.prepare("DELETE FROM tokens WHERE id = ?").bind(id).run();
              return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
         }
     }
@@ -82,7 +82,7 @@ export default {
     // === 4. API: 修改管理员密码 ===
     if (path === '/api/password' && request.method === 'POST') {
       const { username, password } = await request.json();
-      await env.DB.prepare("UPDATE admin SET username = ?, password = ? WHERE id = 1").bind(username, password).run();
+      await env.db.prepare("UPDATE admin SET username = ?, password = ? WHERE id = 1").bind(username, password).run();
       return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -131,7 +131,7 @@ export default {
       // 这里保持 query param 模式: /d?id=xxx
 
       try {
-        const tokenRecord = await env.DB.prepare("SELECT * FROM tokens ORDER BY RANDOM() LIMIT 1").first();
+        const tokenRecord = await env.db.prepare("SELECT * FROM tokens ORDER BY RANDOM() LIMIT 1").first();
         if (!tokenRecord) return new Response('No tokens available.', { status: 503 });
 
         let accessToken = tokenRecord.access_token;
